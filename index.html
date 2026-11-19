@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>¡Caza el Taco Volador! 🌮🪅</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'rosa-mexicano': '#E4007C',
+                        'cempasuchil': '#FF9900',
+                        'verde-bandera': '#006847',
+                        'azul-cobalto': '#0038A8',
+                        'fiesta-yellow': '#FFD000',
+                    },
+                    fontFamily: {
+                        'fredoka': ['Fredoka', 'sans-serif'],
+                        'outfit': ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Desactivar selección de texto y scroll no deseado en celulares */
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            font-family: 'Fredoka', sans-serif;
+            background: linear-gradient(135deg, #1a0826 0%, #0038A8 50%, #001A4D 100%);
+            overflow: hidden;
+        }
+
+        /* Animación de Papel Picado */
+        .papel-picado {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .banderines {
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 35px solid #E4007C;
+            animation: sway 2.5s ease-in-out infinite alternate;
+            transform-origin: top center;
+        }
+
+        .banderines:nth-child(2n) { border-top-color: #FF9900; animation-delay: 0.3s; }
+        .banderines:nth-child(3n) { border-top-color: #006847; animation-delay: 0.6s; }
+        .banderines:nth-child(4n) { border-top-color: #FFD000; animation-delay: 0.9s; }
+        .banderines:nth-child(5n) { border-top-color: #00D2FF; animation-delay: 1.2s; }
+
+        @keyframes sway {
+            0% { transform: rotate(-8deg); }
+            100% { transform: rotate(8deg); }
+        }
+
+        /* Agitar pantalla al recibir castigo */
+        .shake {
+            animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-3px, 0, 0); }
+            20%, 80% { transform: translate3d(5px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
+            40%, 60% { transform: translate3d(8px, 0, 0); }
+        }
+
+        /* Efecto Neón Festivo */
+        .glow-text {
+            text-shadow: 0 0 10px rgba(228, 0, 124, 0.7), 0 0 20px rgba(255, 153, 0, 0.5);
+        }
+        
+        .glow-box {
+            box-shadow: 0 10px 30px rgba(228, 0, 124, 0.3), 0 0 15px rgba(255, 208, 0, 0.2);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen relative flex flex-col justify-between items-center select-none">
+
+    <!-- Guirnalda de Papel Picado superior -->
+    <div class="papel-picado" id="papelPicado"></div>
+
+    <!-- HUD / Encabezado del Juego -->
+    <header class="w-full max-w-2xl px-4 pt-8 pb-2 flex justify-between items-center z-10">
+        <!-- Puntos -->
+        <div class="bg-black/40 backdrop-blur-md border-2 border-cempasuchil px-4 py-2 rounded-2xl flex items-center gap-2 shadow-lg">
+            <span class="text-2xl">🌮</span>
+            <div>
+                <p class="text-xs text-amber-300 font-bold uppercase tracking-wider">Puntos</p>
+                <p id="scoreDisplay" class="text-2xl font-outfit font-black text-white leading-none">0</p>
+            </div>
+        </div>
+
+        <!-- Combo Multiplicador -->
+        <div id="comboContainer" class="opacity-0 transition-opacity duration-300 bg-rosa-mexicano/80 px-3 py-1 rounded-full border border-yellow-300 shadow-md">
+            <span id="comboDisplay" class="text-xs font-black text-white uppercase tracking-widest">¡COMBO x1!</span>
+        </div>
+
+        <!-- Tiempo -->
+        <div class="bg-black/40 backdrop-blur-md border-2 border-rosa-mexicano px-4 py-2 rounded-2xl flex items-center gap-2 shadow-lg">
+            <span class="text-2xl">⏳</span>
+            <div>
+                <p class="text-xs text-pink-300 font-bold uppercase tracking-wider">Tiempo</p>
+                <p id="timerDisplay" class="text-2xl font-outfit font-black text-white leading-none">30s</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Área de Juego (Canvas) -->
+    <main class="relative w-full flex-1 flex justify-center items-center overflow-hidden my-2">
+        <canvas id="gameCanvas"></canvas>
+    </main>
+
+    <!-- Pantalla de Inicio (Modal) -->
+    <div id="startScreen" class="absolute inset-0 z-30 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+        <div class="bg-slate-900 border-4 border-cempasuchil rounded-3xl p-6 md:p-8 max-w-md w-full text-center glow-box relative overflow-hidden">
+            <!-- Adornos festivos -->
+            <div class="absolute -top-10 -right-10 text-7xl opacity-20 select-none">🇲🇽</div>
+            <div class="absolute -bottom-10 -left-10 text-7xl opacity-20 select-none">🪅</div>
+
+            <span class="inline-block px-3 py-1 bg-rosa-mexicano text-white font-bold text-xs rounded-full uppercase tracking-wider mb-2">¡Nerdearla MX Challenge!</span>
+            <h1 class="text-3xl md:text-4xl font-outfit font-black text-transparent bg-clip-text bg-gradient-to-r from-cempasuchil via-rosa-mexicano to-yellow-300 glow-text mb-2">
+                ¡Caza el Taco Volador!
+            </h1>
+            <p class="text-slate-300 text-sm mb-6">Atrapa la mayor cantidad de antojitos mexicanos en 30 segundos. ¡Demuestra tu agilidad taquera!</p>
+
+            <!-- Leyenda de Items -->
+            <div class="grid grid-cols-2 gap-2 text-left bg-black/40 p-4 rounded-2xl border border-white/10 mb-6 text-xs">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🌮</span>
+                    <div>
+                        <p class="font-bold text-yellow-400">Taco al Pastor</p>
+                        <p class="text-slate-400">+100 Puntos</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🌽</span>
+                    <div>
+                        <p class="font-bold text-amber-300">Elote Preparado</p>
+                        <p class="text-slate-400">+150 Puntos</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🪅</span>
+                    <div>
+                        <p class="font-bold text-pink-400">Piñata Extra</p>
+                        <p class="text-slate-400">+300 Puntos</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🌶️</span>
+                    <div>
+                        <p class="font-bold text-red-500">Chile Habanero</p>
+                        <p class="text-slate-400">-200 Puntos</p>
+                    </div>
+                </div>
+                <div class="col-span-2 flex items-center gap-2 border-t border-white/10 pt-2 mt-1">
+                    <span class="text-2xl">🌵</span>
+                    <div>
+                        <p class="font-bold text-emerald-400">Nopal Espinoso</p>
+                        <p class="text-slate-400">¡Resta -5 segundos al reloj!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botón de Inicio -->
+            <button id="startBtn" class="w-full py-4 bg-gradient-to-r from-cempasuchil to-rosa-mexicano hover:from-yellow-400 hover:to-pink-600 text-white font-outfit font-black text-xl rounded-2xl shadow-xl transform active:scale-95 transition-all duration-150 border-2 border-yellow-300">
+                ¡A COMER TACOS! 🌮
+            </button>
+        </div>
+    </div>
+
+    <!-- Pantalla de Juego Terminado (Modal) -->
+    <div id="gameOverScreen" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+        <div class="bg-slate-900 border-4 border-rosa-mexicano rounded-3xl p-6 md:p-8 max-w-md w-full text-center glow-box relative">
+            <div class="text-5xl mb-2 animate-bounce">🎉</div>
+            <h2 class="text-3xl font-outfit font-black text-white mb-1">¡Se acabó el tiempo!</h2>
+            <p id="rankBadge" class="text-sm font-bold text-cempasuchil uppercase tracking-widest mb-4">Taquero Leyenda</p>
+
+            <div class="bg-black/50 p-4 rounded-2xl border border-white/10 mb-6 space-y-3">
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-400">Puntaje Final:</span>
+                    <span id="finalScore" class="text-2xl font-black text-yellow-300">0</span>
+                </div>
+                <div class="flex justify-between items-center text-sm border-t border-white/10 pt-2">
+                    <span class="text-slate-400">Máximo Combo:</span>
+                    <span id="finalCombo" class="text-lg font-bold text-pink-400">x1</span>
+                </div>
+                <div class="flex justify-between items-center text-sm border-t border-white/10 pt-2">
+                    <span class="text-slate-400">Mejor Puntaje:</span>
+                    <span id="highScoreDisplay" class="text-lg font-bold text-emerald-400">0</span>
+                </div>
+            </div>
+
+            <button id="restartBtn" class="w-full py-4 bg-gradient-to-r from-verde-bandera to-emerald-500 hover:from-green-600 hover:to-emerald-400 text-white font-outfit font-black text-xl rounded-2xl shadow-xl transform active:scale-95 transition-all duration-150 border-2 border-green-300">
+                ¡JUGAR OTRA VEZ! 🪅
+            </button>
+        </div>
+    </div>
+
+    <!-- Script Principal -->
+    <script>
+        /* --- SINTETIZADOR DE AUDIO (Web Audio API) --- */
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            // Sonido al atrapar algo bueno
+            playPop(freq = 440) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(freq * 1.8, this.ctx.currentTime + 0.08);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            // Sonido para la Piñata (Arpegio festivo)
+            playPinata() {
+                if (!this.ctx) return;
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((note, index) => {
+                    setTimeout(() => {
+                        this.playPop(note);
+                    }, index * 40);
+                });
+            }
+
+            // Sonido de error / Habanero / Nopal
+            playBad() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(80, this.ctx.currentTime + 0.2);
+
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            // Fanfarria Fin de Juego
+            playGameOver() {
+                if (!this.ctx) return;
+                const notes = [392, 523.25, 659.25, 783.99]; // G4, C5, E5, G5
+                notes.forEach((note, index) => {
+                    setTimeout(() => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(note, this.ctx.currentTime);
+                        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.3);
+                    }, index * 100);
+                });
+            }
+        }
+
+        const sounds = new SoundFX();
+
+        /* --- GENERADOR DE PAPEL PICADO VISUAL --- */
+        const papelPicadoContainer = document.getElementById('papelPicado');
+        for (let i = 0; i < 16; i++) {
+            const banderin = document.createElement('div');
+            banderin.className = 'banderines';
+            papelPicadoContainer.appendChild(banderin);
+        }
+
+        /* --- MOTOR DEL JUEGO (CANVAS) --- */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Estado del Juego
+        let isPlaying = false;
+        let score = 0;
+        let timeLeft = 30;
+        let combo = 0;
+        let maxCombo = 0;
+        let timerInterval = null;
+        let animationFrameId = null;
+        let highScore = localStorage.getItem('taco_high_score') || 0;
+
+        // Elementos y Partículas
+        let targetItems = [];
+        let particles = [];
+        let floatingTexts = [];
+
+        // Tipos de Items del Juego
+        const ITEM_TYPES = [
+            { type: 'taco', emoji: '🌮', points: 100, weight: 45, isTrap: false },
+            { type: 'elote', emoji: '🌽', points: 150, weight: 25, isTrap: false },
+            { type: 'pinata', emoji: '🪅', points: 300, weight: 10, isTrap: false },
+            { type: 'habanero', emoji: '🌶️', points: -200, weight: 12, isTrap: true },
+            { type: 'nopal', emoji: '🌵', penaltyTime: 5, points: 0, weight: 8, isTrap: true }
+        ];
+
+        // Ajustar resolución del Canvas
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Objeto Objetivo (Taco, Elote, etc.)
+        class TargetItem {
+            constructor() {
+                // Seleccionar tipo basado en probabilidad (weight)
+                const totalWeight = ITEM_TYPES.reduce((acc, item) => acc + item.weight, 0);
+                let random = Math.random() * totalWeight;
+                this.config = ITEM_TYPES[0];
+                
+                for (let item of ITEM_TYPES) {
+                    if (random < item.weight) {
+                        this.config = item;
+                        break;
+                    }
+                    random -= item.weight;
+                }
+
+                this.size = Math.min(canvas.width, canvas.height) * 0.12; // Tamaño adaptable
+                this.radius = this.size / 2;
+
+                // Posición inicial (Lanzados desde la parte inferior)
+                this.x = Math.random() * (canvas.width - this.size * 2) + this.size;
+                this.y = canvas.height + this.size;
+
+                // Física de salto
+                this.vx = (Math.random() - 0.5) * (canvas.width * 0.008);
+                this.vy = -(Math.random() * (canvas.height * 0.012) + canvas.height * 0.015);
+                this.gravity = canvas.height * 0.00035;
+
+                // Rotación
+                this.rotation = Math.random() * Math.PI * 2;
+                this.vRot = (Math.random() - 0.5) * 0.1;
+                this.popped = false;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.vy += this.gravity;
+                this.y += this.vy;
+                this.rotation += this.vRot;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.font = `${this.size}px serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.config.emoji, 0, 0);
+                ctx.restore();
+            }
+
+            isOutOfBounds() {
+                return this.y > canvas.height + this.size * 2 && this.vy > 0;
+            }
+        }
+
+        // Partículas al romper o explotar objetos
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.radius = Math.random() * 4 + 2;
+                this.color = color;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.03 + 0.015;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Texto flotante de puntos (+100, -200, ¡COMBO!)
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.vy = -2;
+                this.alpha = 1;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.alpha -= 0.02;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.font = 'bold 24px Outfit, sans-serif';
+                ctx.fillStyle = this.color;
+                ctx.textAlign = 'center';
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        // Crear explosión de partículas
+        function createExplosion(x, y, colors) {
+            for (let i = 0; i < 16; i++) {
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // Iniciar Juego
+        function startGame() {
+            sounds.init();
+            isPlaying = true;
+            score = 0;
+            timeLeft = 30;
+            combo = 0;
+            maxCombo = 0;
+            targetItems = [];
+            particles = [];
+            floatingTexts = [];
+
+            document.getElementById('scoreDisplay').innerText = '0';
+            document.getElementById('timerDisplay').innerText = '30s';
+            document.getElementById('comboContainer').classList.add('opacity-0');
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+
+            // Timer regresivo
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timerDisplay').innerText = `${timeLeft}s`;
+
+                // Alerta visual últimos 5s
+                if (timeLeft <= 5) {
+                    document.getElementById('timerDisplay').classList.add('text-red-400', 'animate-ping');
+                } else {
+                    document.getElementById('timerDisplay').classList.remove('text-red-400', 'animate-ping');
+                }
+
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+
+            // Bucle principal de Renderizado
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            gameLoop();
+        }
+
+        // Finalizar Juego
+        function endGame() {
+            isPlaying = false;
+            clearInterval(timerInterval);
+            sounds.playGameOver();
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('taco_high_score', highScore);
+            }
+
+            // Calcular Rango
+            let rank = 'Comensal Principiante 🌮';
+            if (score >= 3500) rank = '¡El Rey del Taco Imperial! 👑🌮';
+            else if (score >= 2500) rank = 'Taquero Leyenda 🇲🇽';
+            else if (score >= 1500) rank = 'Maestro Piñatero 🪅';
+            else if (score >= 800) rank = 'Aficionado al Pastor 🌽';
+
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('finalCombo').innerText = `x${maxCombo || 1}`;
+            document.getElementById('highScoreDisplay').innerText = highScore;
+            document.getElementById('rankBadge').innerText = rank;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+
+        // Bucle Principal del Juego (60 FPS)
+        let lastSpawn = 0;
+        function gameLoop(timestamp = 0) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (isPlaying) {
+                // Generar nuevos objetos periódicamente
+                if (timestamp - lastSpawn > Math.max(350, 800 - (30 - timeLeft) * 15)) {
+                    targetItems.push(new TargetItem());
+                    lastSpawn = timestamp;
+                }
+
+                // Actualizar y dibujar objetos objetivos
+                for (let i = targetItems.length - 1; i >= 0; i--) {
+                    const item = targetItems[i];
+                    item.update();
+                    item.draw();
+
+                    if (item.isOutOfBounds()) {
+                        // Si se escapa un item bueno, reinicia combo
+                        if (!item.config.isTrap && !item.popped) {
+                            combo = 0;
+                            updateComboUI();
+                        }
+                        targetItems.splice(i, 1);
+                    }
+                }
+            }
+
+            // Actualizar y dibujar partículas
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+
+            // Actualizar y dibujar textos flotantes
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                floatingTexts[i].update();
+                floatingTexts[i].draw();
+                if (floatingTexts[i].alpha <= 0) floatingTexts.splice(i, 1);
+            }
+
+            if (isPlaying || particles.length > 0 || floatingTexts.length > 0) {
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Actualizar UI del Combo
+        function updateComboUI() {
+            const comboContainer = document.getElementById('comboContainer');
+            const comboDisplay = document.getElementById('comboDisplay');
+
+            if (combo > 1) {
+                comboDisplay.innerText = `¡COMBO x${combo}! 🔥`;
+                comboContainer.classList.remove('opacity-0');
+            } else {
+                comboContainer.classList.add('opacity-0');
+            }
+        }
+
+        // Manejador de Interacción (Clic o Toque Táctil)
+        function handleInteraction(clientX, clientY) {
+            if (!isPlaying) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = clientX - rect.left;
+            const clickY = clientY - rect.top;
+
+            for (let i = targetItems.length - 1; i >= 0; i--) {
+                const item = targetItems[i];
+                const dist = Math.hypot(clickX - item.x, clickY - item.y);
+
+                // Colisión detectada (radio holgado para celular)
+                if (dist < item.radius * 1.3) {
+                    item.popped = true;
+
+                    if (!item.config.isTrap) {
+                        // Aumentar Combo
+                        combo++;
+                        if (combo > maxCombo) maxCombo = combo;
+                        updateComboUI();
+
+                        const pointsEarned = item.config.points * Math.min(combo, 5);
+                        score += pointsEarned;
+
+                        // Efectos y Sonidos según item
+                        if (item.config.type === 'pinata') {
+                            sounds.playPinata();
+                            createExplosion(item.x, item.y, ['#E4007C', '#FF9900', '#006847', '#FFD000']);
+                        } else {
+                            sounds.playPop(400 + combo * 50);
+                            createExplosion(item.x, item.y, ['#FFD000', '#FF9900', '#FFFFFF']);
+                        }
+
+                        floatingTexts.push(new FloatingText(item.x, item.y, `+${pointsEarned}`, '#FFD000'));
+                    } else {
+                        // Trampa (Habanero o Nopal)
+                        combo = 0;
+                        updateComboUI();
+                        sounds.playBad();
+                        document.body.classList.add('shake');
+                        setTimeout(() => document.body.classList.remove('shake'), 300);
+
+                        if (item.config.type === 'habanero') {
+                            score = Math.max(0, score + item.config.points);
+                            createExplosion(item.x, item.y, ['#FF0000', '#FF4500']);
+                            floatingTexts.push(new FloatingText(item.x, item.y, `${item.config.points}`, '#FF2222'));
+                        } else if (item.config.type === 'nopal') {
+                            timeLeft = Math.max(0, timeLeft - item.config.penaltyTime);
+                            document.getElementById('timerDisplay').innerText = `${timeLeft}s`;
+                            createExplosion(item.x, item.y, ['#006847', '#2E8B57']);
+                            floatingTexts.push(new FloatingText(item.x, item.y, `-5 SEC!`, '#FF2222'));
+                        }
+                    }
+
+                    document.getElementById('scoreDisplay').innerText = score;
+                    targetItems.splice(i, 1);
+                    break;
+                }
+            }
+        }
+
+        // Eventos de entrada (Mouse y Touch para móviles)
+        canvas.addEventListener('mousedown', (e) => handleInteraction(e.clientX, e.clientY));
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            handleInteraction(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        // Botones de Interfaz
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+    </script>
+</body>
+</html>
